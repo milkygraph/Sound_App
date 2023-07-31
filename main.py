@@ -1,5 +1,4 @@
 import math
-import tkinter
 
 import numpy as np
 import matplotlib.axes
@@ -9,13 +8,13 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import filedialog
 from tkinter import messagebox
+from scipy import signal
 import re
 
 
 class RegisterHandler:
     def __init__(self):
         pass
-
 
     # read the register file in text format and return the EQ values in a list
     def read_register_file(self):
@@ -83,8 +82,6 @@ class RegisterHandler:
             qs.append(match)
             i += 1
 
-
-
         return filters, frequencies, gains, qs
 
 
@@ -102,15 +99,22 @@ def validate_entry(value):
 class UI:
     def __init__(self):
 
+        self.average_correction = 20
+        self.deviant_graph = None
         self.data_hz = []
         self.data_spl = []
         self.reference_hz = []
         self.reference_spl = []
+        self.data_spl_average = 0
+        self.threshold = 3
 
-        self.root = ttk.Window("Sound", themename="darkly")
+        self.root = ttk.Window("Sound", themename="cyborg")
         self.root.geometry("800x600")
 
         self.root.bind("<Configure>", self.on_window_resize)
+
+        bg_color = ttk.Style().lookup("TFrame", "background")
+        fg_color = ttk.Style().lookup("TFrame", "foreground")
 
         self.graph_frame = ttk.Frame(self.root)
         self.graph_frame.grid(row=0, column=0, sticky=ttk.NSEW)
@@ -119,72 +123,21 @@ class UI:
         self.main_frame.grid(row=2, column=0, sticky=ttk.NSEW)
 
         self.fig = plt.figure()
-        self.fig.set_facecolor("#222222")
+        self.fig.set_facecolor(bg_color)
         self.ax = self.fig.add_subplot(111)
-        self.ax.set_facecolor("#222222")
-        self.ax.set_xlabel("Hz", color="white")
-        self.ax.set_ylabel("SPL", color="white")
+        self.ax.set_facecolor(bg_color)
+        self.ax.set_xlabel("Hz", color=fg_color)
+        self.ax.set_ylabel("SPL", color=fg_color)
         self.ax.set_xscale('log')
         self.ax.set_xticks([20, 50, 100, 200, 500, 700, 1000, 1500, 2000, 3000, 4000, 5000, 7000, 10000,
                             13000, 17000, 20000])
-        self.ax.tick_params(axis='x', colors='white')
-        self.ax.tick_params(axis='y', colors='white')
+        self.ax.tick_params(axis='x', colors=fg_color)
+        self.ax.tick_params(axis='y', colors=fg_color)
         self.ax.get_xaxis().set_major_formatter(matplotlib.ticker.EngFormatter())
 
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.graph_frame)
         self.canvas.draw()
         self.canvas.get_tk_widget().grid(row=0, column=0, sticky=ttk.NSEW)
-
-        self.filters_frame = ttk.Frame(self.root)
-        self.filters_frame.grid(row=1, sticky=ttk.NSEW)
-
-        self.filters = []
-        self.entries = []
-        self.gains = []
-        self.qs = []
-        self.filter_vars = []
-        self.frequency_vars = []
-        self.gain_vars = []
-        self.q_vars = []
-
-        self.entries = []
-
-        vcmd = (self.root.register(validate_entry), '%P')
-        filter_types = ["Flat", "High Pass", "Low Shelf", "Peak", "High Shelf", "Low Pass", "Notch"]
-        column = 0
-        while column < 16:
-            ttk.Label(self.filters_frame, text=f"Filter {int(column / 2)}", width=10).grid(row=0, column=column, sticky=ttk.W)
-            self.filters.append(ttk.StringVar(value=filter_types[0]))
-            self.entries.append(ttk.OptionMenu(self.filters_frame, self.filters[int(column / 2)], *filter_types).grid(row=0, column=column+1, sticky=ttk.W))
-
-            ttk.Label(self.filters_frame, text="Frequency", width=10).grid(row=1, column=column, sticky=ttk.W)
-            self.entries.append(ttk.Entry(self.filters_frame, width=10, validate="focusout", validatecommand=vcmd).grid(row=1, column=column + 1, sticky=ttk.W))
-
-            ttk.Label(self.filters_frame, text="Gain", width=10).grid(row=2, column=column, sticky=ttk.W)
-            self.entries.append(ttk.Entry(self.filters_frame, width=10, validate="focusout", validatecommand=vcmd).grid(row=2, column=column + 1, sticky=ttk.W))
-
-            ttk.Label(self.filters_frame, text="Q", width=10).grid(row=3, column=column, sticky=ttk.W)
-            self.entries.append(ttk.Entry(self.filters_frame, width=10, validate="focusout", validatecommand=vcmd).grid(row=3, column=column + 1, sticky=ttk.W))
-            column += 2
-
-        ttk.Label(self.filters_frame, text="", width=10).grid(row=4, columnspan=8, sticky=ttk.W)
-        column = 0
-        while column < 14:
-            ttk.Label(self.filters_frame, text=f"Filter {int(column / 2 + 9)}", width=10).grid(row=5, column=column, sticky=ttk.W)
-            self.filters.append(ttk.StringVar(value=filter_types[0]))
-            self.entries.append(ttk.OptionMenu(self.filters_frame, self.filters[int((column+16)/2)], *filter_types).grid(row=5, column=column+1, sticky=ttk.W))
-
-            ttk.Label(self.filters_frame, text="Frequency", width=10).grid(row=6, column=column, sticky=ttk.W)
-            self.entries.append(ttk.Entry(self.filters_frame, width=10, validate="focusout", validatecommand=vcmd).grid(row=6, column=column + 1, sticky=ttk.W))
-
-            ttk.Label(self.filters_frame, text="Gain", width=10).grid(row=7, column=column, sticky=ttk.W)
-            self.entries.append(ttk.Entry(self.filters_frame, width=10, validate="focusout", validatecommand=vcmd).grid(row=7, column=column + 1, sticky=ttk.W))
-
-            ttk.Label(self.filters_frame, text="Q", width=10).grid(row=8, column=column, sticky=ttk.W)
-            self.entries.append(ttk.Entry(self.filters_frame, width=10, validate="focusout", validatecommand=vcmd).grid(row=8, column=column + 1, sticky=ttk.W))
-
-            column += 2
-
 
         self.load_frame = ttk.Frame(self.main_frame)
         self.load_frame.grid(row=2, columnspan=3, sticky=ttk.W)
@@ -201,6 +154,15 @@ class UI:
 
         self.find_average_button = ttk.Button(self.load_frame, text="Find Average", command=self.find_average_line)
         self.find_average_button.grid(row=1, column=1, sticky=ttk.NSEW, padx=10, pady=10)
+
+        self.test_button = ttk.Button(self.load_frame, text="Test", command=self.test)
+        self.test_button.grid(row=2, column=0, sticky=ttk.NSEW, pady=10)
+
+        self.threshold_slider = ttk.Scale(self.load_frame, from_=0, to=10, orient=ttk.HORIZONTAL, command=self.on_threshold_change)
+        self.threshold_slider.grid(row=2, column=1, sticky=ttk.NSEW, padx=10, pady=10)
+
+        self.threshold_label = ttk.Label(self.load_frame, text="Threshold: {:.2f}".format(self.threshold))
+        self.threshold_label.grid(row=3, column=0, sticky=ttk.NSEW, pady=10)
 
         self.main_frame.grid_rowconfigure(0, weight=1, uniform="labels")
         self.main_frame.grid_rowconfigure(1, weight=1, uniform="labels")
@@ -343,33 +305,63 @@ class UI:
             if line.get_label() == "Average":
                 line.remove()
 
-        mean = logarithmic_average(self.data_spl)
+        self.data_spl_average = self.logarithmic_average(self.data_hz, self.data_spl)
 
-        print("average = ", mean)
-        plt.axhline(y=mean, color="blue", linestyle="--", label="Average")
+        print("average = ", self.data_spl_average)
+        plt.axhline(y=self.data_spl_average, color="green", linestyle="--", label="Average")
+        plt.legend()
+        self.canvas.draw()
+
+    def test(self):
+        # compute the deviant parts of the graph
+        start_frequency = 100
+        start_index = 0
+        for i in range(len(self.data_hz)):
+            if self.data_hz[i] >= start_frequency:
+                start_index = i
+                break
+
+        deviation = np.abs(np.array(self.data_spl) - self.data_spl_average)
+        mask = deviation > float(self.threshold)
+
+        if self.deviant_graph is not None:
+            self.deviant_graph.remove()
+
+        self.deviant_graph = self.ax.fill_between(self.data_hz[start_index:], self.data_spl[start_index:], self.data_spl_average,
+                         where=mask[start_index:], color="red", alpha=0.5, label="Deviant")
+        plt.legend()
         self.canvas.draw()
 
 
+    def on_threshold_change(self, value):
+        self.threshold = value
+        self.threshold_label.config(text="Threshold: {:.2f} dB".format(float(value)))
+        self.test()
 
-def logarithmic_average(numbers):
-    # Take the logarithm of each number using base 10 (you can change the base as needed)
-    log_numbers = [math.log10(x) for x in numbers]
 
-    # Compute the average of the logarithms
-    log_average = sum(log_numbers) / len(log_numbers)
+    def logarithmic_average(self, hz, spl) -> float:
+        # apply low pass filter to the data
+        numbers: np.ndarray = self.filter_data(np.array(hz), np.array(spl))
+        return numbers.mean()
 
-    # Transform the average back to the original scale by exponentiating it
-    average = 10 ** log_average
 
-    return average
+    def filter_data(self, hz, data) -> np.array:
+        # decrease the spl value of the data logarithmically after 13k hz
+        # find the index of 13k hz
+        index = 0
+        cutoff = 5000
+        for i in range(len(hz)):
+            if hz[i] >= cutoff:
+                index = i
+                break
+
+        # decrease the spl value of the data logarithmically after 13k hz
+        for i in range(index, len(data)):
+            data[i] += self.average_correction * np.log10(hz[i] / cutoff)
+
+        return data
 
 
 if __name__ == "__main__":
     app = UI()
     app.run()
-
-
-
-
-
-
